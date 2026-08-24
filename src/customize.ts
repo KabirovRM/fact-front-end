@@ -1,8 +1,9 @@
 export default {
-/*   languages: {
+  languages: {
     ru: {
       customization: {
         title: "Кастомизация",
+        fieldTitle: "Настройка виджетов главной страницы",
       },
       positionsGradesEdit: "Редактировать разряды сотрудников",
       positionsGradesView: "Видеть разряды сотрудников",
@@ -29,6 +30,7 @@ export default {
     en: {
       customization: {
         title: "Customization",
+        fieldTitle: "Main page widgets setup",
       },
       positionsGradesEdit: "Edit employee grades",
       positionsGradesView: "View employee grades",
@@ -55,6 +57,7 @@ export default {
     kk: {
       customization: {
         title: "Кастомизация",
+        fieldTitle: "Басты бет виджеттерін баптау",
       },
       positionsGradesEdit: "Қызметкерлердің бағаларын өңдеу",
       positionsGradesView: "Қызметкерлердің бағаларын қарау",
@@ -79,7 +82,6 @@ export default {
       },
     },
   },
- */
 
 /*   transformRoutes(routes) {
     return routes.map((route) => {
