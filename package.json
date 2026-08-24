@@ -1,0 +1,19 @@
+{
+  "name": "fact-frontend",
+  "version": "1.0.0",
+  "description": "",
+  "private": true,
+  "scripts": {
+    "dev": "npx my-team",
+    "build": "npx my-team build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@private/ismyteam": "^1.61.7"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.12"
+  }
+}

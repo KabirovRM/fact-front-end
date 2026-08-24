@@ -1,0 +1,63 @@
+services:
+
+  app:
+    build:
+      context: .
+      dockerfile: .docker/app/Dockerfile.local
+      args:
+        APP_VERSION_BACKEND: v1.61.1
+    volumes:
+      - ./:/var/www/html
+    entrypoint: [ "/entrypoint.sh" ]
+    ports:
+      - '${APP_BACKEND_PORT:-8000}:8080'
+    env_file: ".env"
+    environment:
+      PUSHER_APP_HOST: ${PUSHER_APP_HOST:-soketi}
+      XDEBUG_CLIENT_PORT: ${XDEBUG_CLIENT_PORT}
+    depends_on:
+      - db
+      - redis
+    container_name: ${APP_CONTAINER_NAME:-dream-team}_backend-app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  db:
+    image: registry.hub.docker.com/library/postgres:14
+    restart: always
+    volumes:
+      - ./.docker/db:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-test}
+      POSTGRES_USER: ${DB_USERNAME:-test}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-test}
+    ports:
+      - '${APP_DATABASE_PORT:-5432}:5432'
+    container_name: ${APP_CONTAINER_NAME:-dream-team}_db
+
+  redis:
+    image: registry.fact.digital/dreamteam-on-premise/add/redis:7.0-alpine
+    restart: always
+    volumes:
+      - ./.docker/redis:/data
+    ports:
+      - '${APP_REDIS_PORT:-6379}:6379'
+    container_name: ${APP_CONTAINER_NAME:-dream-team}_redis
+
+  soketi:
+    image: registry.fact.digital/dreamteam-on-premise/add/soketi:1.6.0-16-distroless
+    restart: always
+    environment:
+      SOKETI_ADAPTER_DRIVER: ${SOKETI_ADAPTER_DRIVER:-redis}
+      SOKETI_DB_REDIS_HOST: ${SOKETI_DB_REDIS_HOST:-redis}
+      SOKETI_DB_REDIS_PORT: ${SOKETI_DB_REDIS_PORT:-6379}
+      SOKETI_DB_REDIS_DB: ${SOKETI_DB_REDIS_DB:-10}
+      SOKETI_DEFAULT_APP_ENABLE_CLIENT_MESSAGES: ${SOKETI_DEFAULT_APP_ENABLE_CLIENT_MESSAGES:-true}
+      SOKETI_DEFAULT_APP_ID: ${PUSHER_APP_ID}
+      SOKETI_DEFAULT_APP_KEY: ${PUSHER_APP_KEY}
+      SOKETI_DEFAULT_APP_SECRET: ${PUSHER_APP_SECRET}
+      SOKETI_PATH_PREFIX: ${PUSHER_APP_WS_PATH}
+    ports:
+      - '${APP_SOKETI_PORT:-6001}:6001'
+      - '${APP_SOKETI_METRICS_SERVER_PORT:-9601}:9601'
+    container_name: ${APP_CONTAINER_NAME:-dream-team}_soketi
