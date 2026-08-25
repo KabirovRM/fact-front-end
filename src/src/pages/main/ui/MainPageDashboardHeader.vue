@@ -19,6 +19,11 @@ const props = defineProps<{
 
 const viewer = useViewerStore();
 
+// Проверка: может ли пользователь кастомизировать дашборд
+const canCustomizeDashboard = computed(() => {
+	return viewer.isAdmin || viewer.canDo?.customize_dashboard_actions === true;
+});
+
 const emit = defineEmits([
 	"cancelChanges",
 	"rollbackDefault",
@@ -109,8 +114,8 @@ const dashboardHeaderStickyTop = computed(() =>
 							<template #reference>
 								<base-button
 									v-if="
-										//!dashboardTemplates ||(dashboardTemplates?.value == 0 && 
-										viewer.isAdmin
+										!dashboardTemplates ||
+										(dashboardTemplates?.value == 0 && canCustomizeDashboard)
 									"
 									id="customize_dashboard"
 									prepend-icon="more-grid-big"
