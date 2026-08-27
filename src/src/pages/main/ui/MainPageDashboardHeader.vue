@@ -8,6 +8,7 @@ import { translate } from "@/shared/lib";
 import { BaseButton } from "@/shared/ui";
 import BaseTitle from "@/shared/ui/title/BaseTitle.vue";
 import { useViewerStore } from "@/store/storeViewer";
+import { useViewerStoreCustom } from "$/store/useViewerStoreCustom";
 
 const props = defineProps<{
 	greeting: string;
@@ -18,11 +19,7 @@ const props = defineProps<{
 }>();
 
 const viewer = useViewerStore();
-
-// Проверка: может ли пользователь кастомизировать дашборд
-const canCustomizeDashboard = computed(() => {
-	return viewer.isAdmin || viewer.canDo?.customize_dashboard_actions === true;
-});
+const { canCustomizeDashboard } = useViewerStoreCustom();
 
 const emit = defineEmits([
 	"cancelChanges",
@@ -97,7 +94,7 @@ const dashboardHeaderStickyTop = computed(() =>
 						</div>
 					</div>
 				</div>
-				<div v-else class="d-header__actions">
+				<div v-else  class="d-header__actions">
 					<dashboard-template-select
 						v-if="dashboardTemplates && viewer.isAdmin"
 						v-model="dashboardTemplates"
@@ -114,8 +111,8 @@ const dashboardHeaderStickyTop = computed(() =>
 							<template #reference>
 								<base-button
 									v-if="
-										!dashboardTemplates ||
-										(dashboardTemplates?.value == 0 && canCustomizeDashboard)
+										(!dashboardTemplates ||
+										(dashboardTemplates?.value == 0 && viewer.isAdmin)) && (viewer.isAdmin || canCustomizeDashboard)
 									"
 									id="customize_dashboard"
 									prepend-icon="more-grid-big"
