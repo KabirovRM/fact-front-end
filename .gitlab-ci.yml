@@ -1,0 +1,62 @@
+# fact-frontend/.gitlab-ci.yml
+
+image: gcr.io/kaniko-project/executor:debug
+
+variables:
+  TAG_COMMIT_CUSTOM_LATEST: ${REGISTRY}/custom/${CI_PROJECT_NAME}:latest
+  TAG_COMMIT_CUSTOM: ${REGISTRY}/custom/${CI_PROJECT_NAME}:$CI_COMMIT_REF_NAME
+  MK_DEPLOY_PROJECT_REF: main
+  MK_DEPLOY_ID: 85967898
+
+stages:
+  - build
+  - deploy
+
+.docker-login-for-kaniko: &docker-login-for-kaniko
+  before_script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"${REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${REGISTRY_USER}" "${REGISTRY_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+
+# Собирает образ для ветки develop
+Build for develop:
+  stage: build
+  <<: *docker-login-for-kaniko
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+  script:
+    - cat $NPMRC_SETUP > .npmrc
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/Dockerfile --destination ${TAG_COMMIT_CUSTOM_LATEST} --destination ${TAG_COMMIT_CUSTOM}
+  variables:
+    KUBERNETES_SERVICE_MEMORY_REQUEST: "4Gi"
+    KUBERNETES_SERVICE_MEMORY_LIMIT: "4Gi"
+
+# Запускает деплой на стейджинг-сервер
+Trigger deploy develop:
+  image: mirror.gcr.io/curlimages/curl:latest
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+  allow_failure: true
+  script:
+    - |
+      curl -X POST \
+        -F token=$MK_DEPLOY_PROJECT_TOKEN \
+        -F ref=$MK_DEPLOY_PROJECT_REF \
+        -F "variables[GITLAB_USER_NAME]=$GITLAB_USER_NAME" \
+        -F "variables[PROJECT_NAME]=$CI_PROJECT_NAME" \
+        -F "variables[PROJECT_IMAGE]=$TAG_COMMIT_CUSTOM" \
+        -F "variables[COMMIT_REF_NAME]=$CI_COMMIT_REF_NAME" \
+        $CI_API_V4_URL/projects/${MK_DEPLOY_ID}/trigger/pipeline
+
+# Собирает образ для staging
+Build for staging:
+  stage: build
+  <<: *docker-login-for-kaniko
+  rules:
+    - if: $CI_COMMIT_BRANCH == "staging"
+  script:
+    - cat $NPMRC_SETUP > .npmrc
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/Dockerfile --destination ${TAG_COMMIT_CUSTOM}
+  variables:
+    KUBERNETES_SERVICE_MEMORY_REQUEST: "4Gi"
+    KUBERNETES_SERVICE_MEMORY_LIMIT: "4Gi"
