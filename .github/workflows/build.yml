@@ -1,0 +1,41 @@
+name: Build and Push to GitVerse
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+env:
+  GITVERSE_REGISTRY: "registry.gitverse.ru"
+  GITVERSE_PROJECT: "kabirovrm/fact-front-end"
+  IMAGE_NAME: "${{ env.GITVERSE_REGISTRY }}/${{ env.GITVERSE_PROJECT }}"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitVerse Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GITVERSE_REGISTRY }}
+          username: ${{ secrets.GITVERSE_USERNAME }}
+          password: ${{ secrets.GITVERSE_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:develop
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
