@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# === Загрузка переменных из .env ===
+if [ -f ".env" ]; then
+  set -a
+  source .env
+  set +a
+fi
+
 # === Конфигурация ===
 GITLAB_REGISTRY="registry.gitlab.com"
 PROJECT_NAME="fact-frontend"
