@@ -1,62 +1,84 @@
 # fact-frontend/.gitlab-ci.yml
+# Сборка кастомного образа на Gitverse (VK Cloud)
 
 image: gcr.io/kaniko-project/executor:debug
 
 variables:
-  TAG_COMMIT_CUSTOM_LATEST: ${REGISTRY}/custom/${CI_PROJECT_NAME}:latest
-  TAG_COMMIT_CUSTOM: ${REGISTRY}/custom/${CI_PROJECT_NAME}:$CI_COMMIT_REF_NAME
-  MK_DEPLOY_PROJECT_REF: main
-  MK_DEPLOY_ID: 85967898
+  # === Registry Gitverse (VK Cloud) ===
+  GITVERSE_REGISTRY: "registry.gitverse.ru"
+  GITVERSE_PROJECT: "kabirovrm/fact-frontend"
+  TAG_LATEST: "${GITVERSE_REGISTRY}/${GITVERSE_PROJECT}:latest"
+  TAG_REF: "${GITVERSE_REGISTRY}/${GITVERSE_PROJECT}:${CI_COMMIT_REF_NAME}"
+  TAG_SHA: "${GITVERSE_REGISTRY}/${GITVERSE_PROJECT}:${CI_COMMIT_SHORT_SHA}"
+
+  # === NPM private registry ===
+  NPM_REGISTRY: "repo.fact.digital"
+  NPM_REGISTRY_USER: "${NPM_REGISTRY_USER}"
+  NPM_REGISTRY_PASSWORD: "${NPM_REGISTRY_PASSWORD}"
 
 stages:
   - build
-  - deploy
+  - push-tags
 
-.docker-login-for-kaniko: &docker-login-for-kaniko
+# === Сборка образа для develop ===
+build-develop:
+  stage: build
   before_script:
     - mkdir -p /kaniko/.docker
-    - echo "{\"auths\":{\"${REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${REGISTRY_USER}" "${REGISTRY_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
-
-# Собирает образ для ветки develop
-Build for develop:
-  stage: build
-  <<: *docker-login-for-kaniko
-  rules:
-    - if: $CI_COMMIT_BRANCH == "develop"
-  script:
-    - cat $NPMRC_SETUP > .npmrc
-    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/Dockerfile --destination ${TAG_COMMIT_CUSTOM_LATEST} --destination ${TAG_COMMIT_CUSTOM}
-  variables:
-    KUBERNETES_SERVICE_MEMORY_REQUEST: "4Gi"
-    KUBERNETES_SERVICE_MEMORY_LIMIT: "4Gi"
-
-# Запускает деплой на стейджинг-сервер
-Trigger deploy develop:
-  image: mirror.gcr.io/curlimages/curl:latest
-  stage: deploy
-  rules:
-    - if: $CI_COMMIT_BRANCH == "develop"
-  allow_failure: true
-  script:
+    # Логин для push в Gitverse
+    - echo "{\"auths\":{\"${GITVERSE_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${GIT_TOKEN_USER}" "${GIT_TOKEN}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+    # Создаём .npmrc для доступа к приватным пакетам
     - |
-      curl -X POST \
-        -F token=$MK_DEPLOY_PROJECT_TOKEN \
-        -F ref=$MK_DEPLOY_PROJECT_REF \
-        -F "variables[GITLAB_USER_NAME]=$GITLAB_USER_NAME" \
-        -F "variables[PROJECT_NAME]=$CI_PROJECT_NAME" \
-        -F "variables[PROJECT_IMAGE]=$TAG_COMMIT_CUSTOM" \
-        -F "variables[COMMIT_REF_NAME]=$CI_COMMIT_REF_NAME" \
-        $CI_API_V4_URL/projects/${MK_DEPLOY_ID}/trigger/pipeline
-
-# Собирает образ для staging
-Build for staging:
-  stage: build
-  <<: *docker-login-for-kaniko
-  rules:
-    - if: $CI_COMMIT_BRANCH == "staging"
+      cat > .npmrc <<NPMEOF
+      @private:registry=https://${NPM_REGISTRY}/repository/npm-customize/
+      //${NPM_REGISTRY}/repository/npm-customize/:_auth=$(printf "%s:%s" "${NPM_REGISTRY_USER}" "${NPM_REGISTRY_PASSWORD}" | base64)
+      NPMEOF
   script:
-    - cat $NPMRC_SETUP > .npmrc
-    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/Dockerfile --destination ${TAG_COMMIT_CUSTOM}
+    - /kaniko/executor \
+        --context $CI_PROJECT_DIR \
+        --dockerfile $CI_PROJECT_DIR/Dockerfile \
+        --destination ${TAG_LATEST} \
+        --destination ${TAG_REF} \
+        --destination ${TAG_SHA}
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
   variables:
     KUBERNETES_SERVICE_MEMORY_REQUEST: "4Gi"
     KUBERNETES_SERVICE_MEMORY_LIMIT: "4Gi"
+
+# === Сборка образа для release-веток ===
+build-release:
+  stage: build
+  before_script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"${GITVERSE_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${GIT_TOKEN_USER}" "${GIT_TOKEN}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+    - |
+      cat > .npmrc <<NPMEOF
+      @private:registry=https://${NPM_REGISTRY}/repository/npm-customize/
+      //${NPM_REGISTRY}/repository/npm-customize/:_auth=$(printf "%s:%s" "${NPM_REGISTRY_USER}" "${NPM_REGISTRY_PASSWORD}" | base64)
+      NPMEOF
+  script:
+    - /kaniko/executor \
+        --context $CI_PROJECT_DIR \
+        --dockerfile $CI_PROJECT_DIR/Dockerfile \
+        --destination ${TAG_REF} \
+        --destination ${TAG_SHA}
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^v[0-9]+\.[0-9]+/
+  variables:
+    KUBERNETES_SERVICE_MEMORY_REQUEST: "4Gi"
+    KUBERNETES_SERVICE_MEMORY_LIMIT: "4Gi"
+
+# === Автоматическая тегация develop → latest ===
+tag-develop-latest:
+  stage: push-tags
+  image: alpine/helm:latest
+  before_script:
+    - apk add --no-cache docker-cli
+  script:
+    - docker pull ${TAG_REF}
+    - docker tag ${TAG_REF} ${TAG_LATEST}
+    - docker push ${TAG_LATEST}
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+      when: manual
